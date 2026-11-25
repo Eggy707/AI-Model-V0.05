@@ -6,7 +6,7 @@ import hashlib
 import json
 import os
 
-st.set_page_config(page_title="AI Model V0.09", page_icon="🟠", layout="wide")
+st.set_page_config(page_title="Coda", page_icon="🟠", layout="wide")
 
 client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
