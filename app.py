@@ -181,14 +181,14 @@ with st.sidebar:
                     model="openai/gpt-oss-120b",
                     messages=extract_prompt
                 )
-                new_facts = res.choices.message.content.strip().split("\n")
+                new_facts = res.choices[0].message.content.strip().split("\n")
                 today_str = datetime.now(ZoneInfo("America/Vancouver")).strftime("%b %d")
                 for fact in new_facts:
                     clean_fact = fact.lstrip("-•* ").strip()
                     if clean_fact:
                         st.session_state.long_term_memories.append(f"[{today_str}] {clean_fact}")
                 sync_user_memories()
-                st.session_state.messages = get_system_prompt()
+                st.session_state.messages[0] = get_system_prompt()
                 st.success("Saved to your memory!")
         else:
             st.warning("Chat a bit first before saving!")
@@ -200,7 +200,7 @@ with st.sidebar:
             if st.button("Clear all memories", use_container_width=True):
                 st.session_state.long_term_memories = []
                 sync_user_memories()
-                st.session_state.messages = get_system_prompt()
+                st.session_state.messages[0] = get_system_prompt()
                 st.rerun()
         else:
             st.caption("No memories saved yet.")
@@ -210,7 +210,7 @@ with st.sidebar:
             today_str = datetime.now(ZoneInfo("America/Vancouver")).strftime("%b %d")
             st.session_state.long_term_memories.append(f"[{today_str}] {manual_mem.strip()}")
             sync_user_memories()
-            st.session_state.messages = get_system_prompt()
+            st.session_state.messages[0] = get_system_prompt()
             st.rerun()
 
     st.divider()
@@ -252,10 +252,10 @@ if prompt := st.chat_input("Write a message..."):
             stream=True
         )
         for chunk in stream:
-         if chunk.choices:
-             token = chunk.choices[0].delta.content or ""
-             full_response += token
-            placeholder.markdown(full_response + "▌")
+            if chunk.choices:
+                token = chunk.choices[0].delta.content or ""
+                full_response += token
+                placeholder.markdown(full_response + "▌")
         placeholder.markdown(full_response)
 
     st.session_state.messages.append({"role": "assistant", "content": full_response})
