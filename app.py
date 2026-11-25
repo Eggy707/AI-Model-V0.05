@@ -80,16 +80,17 @@ def get_system_prompt():
     return {
         "role": "system",
         "content": (
-            f"{name_context}You are my close friend texting me casually. "
-            "NEVER say 'How can I help you' or act like a customer service bot. "
-            "Keep replies natural, thoughtful, and conversational."
+            f"{name_context}You are Coda, a sharp, emotionally intelligent close friend. "
+            "NEVER use robotic filler like 'How can I help you' or 'feel free to ask.' "
+            "Think deeply about what the user shares: spot patterns in their day, offer thoughtful perspectives, "
+            "ask one genuinely curious follow-up question, and match their energy."
             f"{memory_context}"
         )
     }
 
 # --- LOGIN / SIGN UP / GUEST SCREEN ---
 if not st.session_state.setup_done:
-    st.markdown("<h2 style='text-align: center; margin-top: 10vh;'>🟠 AI Model V0.09</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align: center; margin-top: 10vh;'>🟠 Coda</h2>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; color: #9E9D99;'>Log in to load your personal memories, create an account, or continue as a guest.</p>", unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -158,7 +159,7 @@ if "messages" not in st.session_state:
     st.session_state.messages = [get_system_prompt()]
 
 with st.sidebar:
-    st.markdown("### 🟠 AI Model V0.09")
+    st.markdown("### 🟠 Coda")
     if st.button("＋  New chat", use_container_width=True):
         st.session_state.messages = [get_system_prompt()]
         st.rerun()
@@ -177,17 +178,17 @@ with st.sidebar:
                     }
                 ]
                 res = client.chat.completions.create(
-                    model="openai/gpt-oss-20b",
+                    model="openai/gpt-oss-120b",
                     messages=extract_prompt
                 )
-                new_facts = res.choices[0].message.content.strip().split("\n")
+                new_facts = res.choices.message.content.strip().split("\n")
                 today_str = datetime.now(ZoneInfo("America/Vancouver")).strftime("%b %d")
                 for fact in new_facts:
                     clean_fact = fact.lstrip("-•* ").strip()
                     if clean_fact:
                         st.session_state.long_term_memories.append(f"[{today_str}] {clean_fact}")
                 sync_user_memories()
-                st.session_state.messages[0] = get_system_prompt()
+                st.session_state.messages = get_system_prompt()
                 st.success("Saved to your memory!")
         else:
             st.warning("Chat a bit first before saving!")
@@ -199,7 +200,7 @@ with st.sidebar:
             if st.button("Clear all memories", use_container_width=True):
                 st.session_state.long_term_memories = []
                 sync_user_memories()
-                st.session_state.messages[0] = get_system_prompt()
+                st.session_state.messages = get_system_prompt()
                 st.rerun()
         else:
             st.caption("No memories saved yet.")
@@ -209,7 +210,7 @@ with st.sidebar:
             today_str = datetime.now(ZoneInfo("America/Vancouver")).strftime("%b %d")
             st.session_state.long_term_memories.append(f"[{today_str}] {manual_mem.strip()}")
             sync_user_memories()
-            st.session_state.messages[0] = get_system_prompt()
+            st.session_state.messages = get_system_prompt()
             st.rerun()
 
     st.divider()
@@ -245,12 +246,13 @@ if prompt := st.chat_input("Write a message..."):
         full_response = ""
         
         stream = client.chat.completions.create(
-            model="openai/gpt-oss-20b",
+            model="openai/gpt-oss-120b",
             messages=st.session_state.messages,
+            reasoning_effort="medium",
             stream=True
         )
         for chunk in stream:
-            token = chunk.choices[0].delta.content or ""
+            token = chunk.choices.delta.content or ""
             full_response += token
             placeholder.markdown(full_response + "▌")
         placeholder.markdown(full_response)
