@@ -251,9 +251,10 @@ if prompt := st.chat_input("Write a message..."):
             reasoning_effort="medium",
             stream=True
         )
-        for chunk in stream:
-            token = chunk.choices.delta.content or ""
-            full_response += token
+             for chunk in stream:
+         if chunk.choices:
+             token = chunk.choices[0].delta.content or ""
+             full_response += token
             placeholder.markdown(full_response + "▌")
         placeholder.markdown(full_response)
 
