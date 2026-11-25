@@ -3,7 +3,7 @@ from groq import Groq
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-st.set_page_config(page_title="AI Model V0.07", page_icon="🟠", layout="wide")
+st.set_page_config(page_title="AI Model V0.08", page_icon="🟠", layout="wide")
 
 client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
@@ -20,13 +20,14 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Initialize user account state
+# Initialize session states
 if "user_name" not in st.session_state:
     st.session_state.user_name = ""
 if "setup_done" not in st.session_state:
     st.session_state.setup_done = False
+if "long_term_memories" not in st.session_state:
+    st.session_state.long_term_memories = []
 
-# Dynamic greeting (adds ", Name" only if an account was created)
 def get_greeting():
     hour = datetime.now(ZoneInfo("America/Vancouver")).hour
     if 5 <= hour < 12:
@@ -42,18 +43,30 @@ def get_greeting():
 
 def get_system_prompt():
     name_context = f"The user's name is {st.session_state.user_name}. " if st.session_state.user_name else ""
+    
+    # Inject saved long-term memories into the AI's brain
+    memory_context = ""
+    if st.session_state.long_term_memories:
+        joined_memories = "\n".join(f"- {m}" for m in st.session_state.long_term_memories)
+        memory_context = (
+            "\n\nHere are long-term memories you remember from past conversations with the user:\n"
+            f"{joined_memories}\n"
+            "Naturally reference these memories when relevant, just like a real friend would, without sounding robotic."
+        )
+
     return {
         "role": "system",
         "content": (
             f"{name_context}You are my close friend texting me casually. "
             "NEVER say 'How can I help you' or act like a customer service bot. "
             "Keep replies natural, thoughtful, and conversational."
+            f"{memory_context}"
         )
     }
 
 # --- ACCOUNT CREATION / SKIP SCREEN ---
 if not st.session_state.setup_done:
-    st.markdown("<h2 style='text-align: center; margin-top: 12vh;'>🟠 Welcome to AI Model V0.07</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align: center; margin-top: 12vh;'>🟠 Welcome to AI Model V0.08</h2>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; color: #9E9D99;'>Create a quick profile to personalize your AI, or skip to stay anonymous.</p>", unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -85,11 +98,61 @@ if "messages" not in st.session_state:
     st.session_state.messages = [get_system_prompt()]
 
 with st.sidebar:
-    st.markdown("### 🟠 AI Model V0.07")
+    st.markdown("### 🟠 AI Model V0.08")
     if st.button("＋  New chat", use_container_width=True):
+        # Refresh system prompt so new chat loads all saved memories
         st.session_state.messages = [get_system_prompt()]
         st.rerun()
-    
+
+    # Button to extract and save memories from current conversation
+    if st.button("🧠  Save chat to memory", use_container_width=True):
+        if len(st.session_state.messages) > 1:
+            with st.spinner("Saving memories..."):
+                extract_prompt = st.session_state.messages[1:] + [
+                    {
+                        "role": "user",
+                        "content": (
+                            "Extract 1 to 3 short, important bullet-point facts or events from our chat above "
+                            "that a close friend should remember for future days (e.g. goals, mood, projects, school/work). "
+                            "Output ONLY the short bullet points, nothing else."
+                        )
+                    }
+                ]
+                res = client.chat.completions.create(
+                    model="openai/gpt-oss-20b",
+                    messages=extract_prompt
+                )
+                new_facts = res.choices[0].message.content.strip().split("\n")
+                today_str = datetime.now(ZoneInfo("America/Vancouver")).strftime("%b %d")
+                for fact in new_facts:
+                    clean_fact = fact.lstrip("-•* ").strip()
+                    if clean_fact:
+                        st.session_state.long_term_memories.append(f"[{today_str}] {clean_fact}")
+                # Update active chat's system prompt immediately
+                st.session_state.messages[0] = get_system_prompt()
+                st.success("Saved to long-term memory!")
+        else:
+            st.warning("Chat a bit first before saving!")
+
+    # View & manage saved memories
+    with st.expander(f"📚 Saved Memories ({len(st.session_state.long_term_memories)})"):
+        if st.session_state.long_term_memories:
+            for i, mem in enumerate(st.session_state.long_term_memories):
+                st.caption(mem)
+            if st.button("Clear all memories", use_container_width=True):
+                st.session_state.long_term_memories = []
+                st.session_state.messages[0] = get_system_prompt()
+                st.rerun()
+        else:
+            st.caption("No memories saved yet. Chat and click 'Save chat to memory'!")
+        
+        manual_mem = st.text_input("Add custom memory:", placeholder="e.g., I have a math test Friday")
+        if st.button("Add memory", use_container_width=True) and manual_mem.strip():
+            today_str = datetime.now(ZoneInfo("America/Vancouver")).strftime("%b %d")
+            st.session_state.long_term_memories.append(f"[{today_str}] {manual_mem.strip()}")
+            st.session_state.messages[0] = get_system_prompt()
+            st.rerun()
+
     st.divider()
     if st.session_state.user_name:
         st.caption(f"👤 Signed in as **{st.session_state.user_name}**")
