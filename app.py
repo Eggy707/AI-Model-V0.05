@@ -1,7 +1,9 @@
 import streamlit as st
 from groq import Groq
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
-st.set_page_config(page_title="AI Model V0.05", page_icon="🟠", layout="wide")
+st.set_page_config(page_title="AI Model V0.06", page_icon="🟠", layout="wide")
 
 client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
@@ -18,6 +20,16 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# Dynamic greeting based on your local Pacific Time
+def get_greeting():
+    hour = datetime.now(ZoneInfo("America/Vancouver")).hour
+    if 5 <= hour < 12:
+        return "Good morning, Ethan"
+    elif 12 <= hour < 17:
+        return "Good afternoon, Ethan"
+    else:
+        return "Good evening, Ethan"
+
 SYSTEM_PROMPT = {
     "role": "system",
     "content": (
@@ -31,13 +43,14 @@ if "messages" not in st.session_state:
     st.session_state.messages = [SYSTEM_PROMPT]
 
 with st.sidebar:
-    st.markdown("### 🟠 AI Model V0.05")
+    st.markdown("### 🟠 AI Model V0.06")
     if st.button("＋  New chat", use_container_width=True):
         st.session_state.messages = [SYSTEM_PROMPT]
         st.rerun()
 
 if len(st.session_state.messages) == 1:
-    st.markdown("<h2 style='text-align: center; margin-top: 15vh;'>Good evening, Ethan</h2>", unsafe_allow_html=True)
+    greeting_text = get_greeting()
+    st.markdown(f"<h2 style='text-align: center; margin-top: 15vh;'>{greeting_text}</h2>", unsafe_allow_html=True)
 
 for msg in st.session_state.messages[1:]:
     avatar = "👤" if msg["role"] == "user" else "🟠"
@@ -59,7 +72,7 @@ if prompt := st.chat_input("Write a message..."):
             stream=True
         )
         for chunk in stream:
-            token = chunk.choices[0].delta.content or ""
+            token = chunk.choices.delta.content or ""
             full_response += token
             placeholder.markdown(full_response + "▌")
         placeholder.markdown(full_response)
