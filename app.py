@@ -20,6 +20,11 @@ st.markdown("""
     [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) {
         background-color: transparent; padding: 8px 4px; border: none;
     }
+    [data-testid="stStatusWidget"] {
+        background-color: #1F1E1D;
+        border: 1px solid #383735;
+        border-radius: 10px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -80,10 +85,11 @@ def get_system_prompt():
     return {
         "role": "system",
         "content": (
-            f"{name_context}You are Coda, a sharp, emotionally intelligent close friend. "
+            f"{name_context}You are Coda, a sharp, emotionally intelligent close friend who is also a hardcore gamer and theorycrafter. "
             "NEVER use robotic filler like 'How can I help you' or 'feel free to ask.' "
-            "Think deeply about what the user shares: spot patterns in their day, offer thoughtful perspectives, "
-            "ask one genuinely curious follow-up question, and match their energy."
+            "Keep casual chats natural and match the user's energy. "
+            "When talking about video games, stats, loadouts, DPS, or TTK (time-to-kill), ALWAYS double-check the math step-by-step "
+            "(factoring in fire rate, reload time, crit multipliers, and cooldowns) and gently catch any math or build mistakes before giving your take."
             f"{memory_context}"
         )
     }
@@ -167,12 +173,15 @@ with st.sidebar:
     if st.button("🧠  Save chat to memory", use_container_width=True):
         if len(st.session_state.messages) > 1:
             with st.spinner("Saving memories..."):
-                extract_prompt = st.session_state.messages[1:] + [
+                extract_prompt = [
+                    {"role": m["role"], "content": m["content"]}
+                    for m in st.session_state.messages[1:]
+                ] + [
                     {
                         "role": "user",
                         "content": (
                             "Extract 1 to 3 short, important bullet-point facts or events from our chat above "
-                            "that a close friend should remember for future days (e.g. goals, mood, projects, school/work). "
+                            "that a close friend should remember for future days (e.g. goals, mood, projects, games, school). "
                             "Output ONLY the short bullet points, nothing else."
                         )
                     }
@@ -205,7 +214,7 @@ with st.sidebar:
         else:
             st.caption("No memories saved yet.")
         
-        manual_mem = st.text_input("Add custom memory:", placeholder="e.g., I have a math test Friday")
+        manual_mem = st.text_input("Add custom memory:", placeholder="e.g., I main Sniper in Rivals")
         if st.button("Add memory", use_container_width=True) and manual_mem.strip():
             today_str = datetime.now(ZoneInfo("America/Vancouver")).strftime("%b %d")
             st.session_state.long_term_memories.append(f"[{today_str}] {manual_mem.strip()}")
@@ -234,6 +243,9 @@ if len(st.session_state.messages) == 1:
 for msg in st.session_state.messages[1:]:
     avatar = "👤" if msg["role"] == "user" else "🟠"
     with st.chat_message(msg["role"], avatar=avatar):
+        if msg.get("thought"):
+            with st.expander("💭 Thought process"):
+                st.write(msg["thought"])
         st.write(msg["content"])
 
 if prompt := st.chat_input("Write a message..."):
@@ -242,20 +254,51 @@ if prompt := st.chat_input("Write a message..."):
         st.write(prompt)
 
     with st.chat_message("assistant", avatar="🟠"):
-        placeholder = st.empty()
+        thought_box = st.status("Thinking...", expanded=True)
+        thought_placeholder = thought_box.empty()
+        answer_placeholder = st.empty()
+
+        full_thought = ""
         full_response = ""
-        
+        thought_finished = False
+
+        api_messages = [
+            {"role": m["role"], "content": m["content"]}
+            for m in st.session_state.messages
+        ]
+
         stream = client.chat.completions.create(
             model="openai/gpt-oss-120b",
-            messages=st.session_state.messages,
-            reasoning_effort="medium",
+            messages=api_messages,
+            reasoning_effort="high",
             stream=True
         )
+
         for chunk in stream:
             if chunk.choices:
-                token = chunk.choices[0].delta.content or ""
-                full_response += token
-                placeholder.markdown(full_response + "▌")
-        placeholder.markdown(full_response)
+                delta = chunk.choices[0].delta
+                reasoning_token = getattr(delta, "reasoning", None) or ""
+                content_token = delta.content or ""
 
-    st.session_state.messages.append({"role": "assistant", "content": full_response})
+                if reasoning_token:
+                    full_thought += reasoning_token
+                    thought_placeholder.markdown(full_thought + "▌")
+
+                if content_token:
+                    if not thought_finished:
+                        if full_thought:
+                            thought_placeholder.markdown(full_thought)
+                            thought_box.update(label="💭 Thought process", state="complete", expanded=False)
+                        else:
+                            thought_box.update(label="Done", state="complete", expanded=False)
+                        thought_finished = True
+                    full_response += content_token
+                    answer_placeholder.markdown(full_response + "▌")
+
+        answer_placeholder.markdown(full_response)
+
+    st.session_state.messages.append({
+        "role": "assistant",
+        "content": full_response,
+        "thought": full_thought
+    })
