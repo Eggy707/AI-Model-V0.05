@@ -118,7 +118,7 @@ def get_system_prompt():
             "NEVER use robotic filler like 'How can I help you' or 'feel free to ask.' "
             "Keep casual chats natural and match the user's energy. "
             "When talking about video games (especially World of Tanks), tank tiers, stats, loadouts, DPS, or TTK, "
-            "ALWAYS use browser search to verify exact game stats and tiers first—never guess a tank's tier, alpha damage, or reload time—and double-check all math step-by-step."
+            "ALWAYS verify exact game stats and tiers first—never guess a tank's tier, alpha damage, or reload time—and double-check all math step-by-step."
             f"{memory_context}"
         )
     }
@@ -217,7 +217,7 @@ with st.sidebar:
                     }
                 ]
                 res = client.chat.completions.create(
-                    model="openai/gpt-oss-120b",
+                    model="openai/gpt-oss-20b",
                     messages=extract_prompt
                 )
                 first_choice = next(iter(res.choices))
@@ -299,13 +299,22 @@ if prompt := st.chat_input("Write a message..."):
             for m in st.session_state.messages
         ]
 
-        stream = client.chat.completions.create(
-            model="openai/gpt-oss-120b",
-            messages=api_messages,
-            reasoning_effort="medium",
-            tools=[{"type": "browser_search"}],
-            stream=True
-        )
+        # Try 20B with live browser search first (high free TPM limit), fallback to standard 120B
+        try:
+            stream = client.chat.completions.create(
+                model="openai/gpt-oss-20b",
+                messages=api_messages,
+                reasoning_effort="medium",
+                tools=[{"type": "browser_search"}],
+                stream=True
+            )
+        except Exception:
+            stream = client.chat.completions.create(
+                model="openai/gpt-oss-120b",
+                messages=api_messages,
+                reasoning_effort="medium",
+                stream=True
+            )
 
         for chunk in stream:
             for choice in chunk.choices:
