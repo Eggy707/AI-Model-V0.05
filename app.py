@@ -113,8 +113,8 @@ def get_system_prompt():
             f"{name_context}You are Coda, a sharp, emotionally intelligent close friend who is also a hardcore gamer and theorycrafter. "
             "NEVER use robotic filler like 'How can I help you' or 'feel free to ask.' "
             "Keep casual chats natural and match the user's energy. "
-            "When talking about video games, stats, loadouts, DPS, or TTK (time-to-kill), ALWAYS double-check the math step-by-step "
-            "(factoring in fire rate, reload time, crit multipliers, and cooldowns) and gently catch any math or build mistakes before giving your take."
+            "When talking about video games (especially World of Tanks), tank tiers, stats, loadouts, DPS, or TTK, "
+            "ALWAYS use web search to verify exact game stats and tiers first—never guess a tank's tier, alpha damage, or reload time—and double-check all math step-by-step."
             f"{memory_context}"
         )
     }
@@ -238,7 +238,7 @@ with st.sidebar:
         else:
             st.caption("No memories saved yet.")
         
-        manual_mem = st.text_input("Add custom memory:", placeholder="e.g., I main Sniper in Rivals")
+        manual_mem = st.text_input("Add custom memory:", placeholder="e.g., I grind Tier 9 heavies in WoT")
         if st.button("Add memory", use_container_width=True) and manual_mem.strip():
             today_str = datetime.now(ZoneInfo("America/Vancouver")).strftime("%b %d")
             st.session_state.long_term_memories.append(f"[{today_str}] {manual_mem.strip()}")
@@ -269,7 +269,7 @@ for msg in st.session_state.messages[1:]:
     avatar = "👤" if msg["role"] == "user" else "🟠"
     with st.chat_message(msg["role"], avatar=avatar):
         if msg.get("thought"):
-            with st.expander("💭 Thought process"):
+            with st.expander("💭 Thought & search process"):
                 st.write(msg["thought"])
         st.write(msg["content"])
 
@@ -279,7 +279,7 @@ if prompt := st.chat_input("Write a message..."):
         st.write(prompt)
 
     with st.chat_message("assistant", avatar="🟠"):
-        thought_box = st.status("Thinking...", expanded=True)
+        thought_box = st.status("Searching & thinking...", expanded=True)
         thought_placeholder = thought_box.empty()
         answer_placeholder = st.empty()
 
@@ -293,9 +293,8 @@ if prompt := st.chat_input("Write a message..."):
         ]
 
         stream = client.chat.completions.create(
-            model="openai/gpt-oss-120b",
+            model="groq/compound",
             messages=api_messages,
-            reasoning_effort="medium",
             stream=True
         )
 
@@ -313,7 +312,7 @@ if prompt := st.chat_input("Write a message..."):
                     if not thought_finished:
                         if full_thought:
                             thought_placeholder.markdown(full_thought)
-                            thought_box.update(label="💭 Thought process", state="complete", expanded=False)
+                            thought_box.update(label="💭 Thought & search process", state="complete", expanded=False)
                         else:
                             thought_box.update(label="Done", state="complete", expanded=False)
                         thought_finished = True
