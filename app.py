@@ -43,8 +43,23 @@ def save_users(users):
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
+# Auto-login check from device URL parameter
 if "user_name" not in st.session_state:
-    st.session_state.user_name = ""
+    saved_user = st.query_params.get("user", "")
+    if saved_user:
+        users = load_users()
+        user_key = saved_user.strip().lower()
+        if user_key in users:
+            st.session_state.user_name = users[user_key]["display_name"]
+            st.session_state.long_term_memories = users[user_key].get("memories", [])
+            st.session_state.setup_done = True
+        else:
+            st.session_state.user_name = saved_user.strip()
+            st.session_state.long_term_memories = []
+            st.session_state.setup_done = True
+    else:
+        st.session_state.user_name = ""
+
 if "setup_done" not in st.session_state:
     st.session_state.setup_done = False
 if "long_term_memories" not in st.session_state:
@@ -119,10 +134,12 @@ if not st.session_state.setup_done:
                     elif users[user_key]["password"] != hash_password(login_pass):
                         st.error("Incorrect password.")
                     else:
-                        st.session_state.user_name = users[user_key]["display_name"]
+                        display_name = users[user_key]["display_name"]
+                        st.session_state.user_name = display_name
                         st.session_state.long_term_memories = users[user_key].get("memories", [])
                         st.session_state.setup_done = True
                         st.session_state.messages = [get_system_prompt()]
+                        st.query_params["user"] = display_name
                         st.rerun()
 
         with tab_signup:
@@ -150,6 +167,7 @@ if not st.session_state.setup_done:
                         st.session_state.long_term_memories = []
                         st.session_state.setup_done = True
                         st.session_state.messages = [get_system_prompt()]
+                        st.query_params["user"] = clean_name
                         st.rerun()
 
         st.divider()
@@ -158,6 +176,7 @@ if not st.session_state.setup_done:
             st.session_state.long_term_memories = []
             st.session_state.setup_done = True
             st.session_state.messages = [get_system_prompt()]
+            st.query_params.clear()
             st.rerun()
     st.stop()
 
@@ -230,6 +249,7 @@ with st.sidebar:
             st.session_state.long_term_memories = []
             st.session_state.setup_done = False
             st.session_state.messages = []
+            st.query_params.clear()
             st.rerun()
     else:
         st.caption("👤 Guest Mode")
