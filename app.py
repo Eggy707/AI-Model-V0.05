@@ -39,8 +39,9 @@ def get_user_record(username):
     user_key = username.strip().lower()
     url = f"{SB_URL}/rest/v1/users?username=eq.{user_key}&select=*"
     res = requests.get(url, headers=SB_HEADERS)
-    if res.status_code == 200 and res.json():
-        return res.json()[0]
+    if res.status_code == 200:
+        rows = res.json()
+        return next(iter(rows), None)
     return None
 
 def create_user_record(username, password):
@@ -182,6 +183,7 @@ if not st.session_state.setup_done:
             st.rerun()
     st.stop()
 
+
 if "messages" not in st.session_state:
     st.session_state.messages = [get_system_prompt()]
 
@@ -211,7 +213,7 @@ with st.sidebar:
                     model="openai/gpt-oss-120b",
                     messages=extract_prompt
                 )
-                first_choice = res.choices
+                first_choice = next(iter(res.choices))
                 new_facts = first_choice.message.content.strip().split("\n")
                 today_str = datetime.now(ZoneInfo("America/Vancouver")).strftime("%b %d")
                 for fact in new_facts:
@@ -219,7 +221,7 @@ with st.sidebar:
                     if clean_fact:
                         st.session_state.long_term_memories.append(f"[{today_str}] {clean_fact}")
                 sync_user_memories()
-                st.session_state.messages = get_system_prompt()
+                st.session_state.messages = [get_system_prompt()] + st.session_state.messages[1:]
                 st.success("Saved permanently to cloud!")
         else:
             st.warning("Chat a bit first before saving!")
@@ -231,7 +233,7 @@ with st.sidebar:
             if st.button("Clear all memories", use_container_width=True):
                 st.session_state.long_term_memories = []
                 sync_user_memories()
-                st.session_state.messages = get_system_prompt()
+                st.session_state.messages = [get_system_prompt()] + st.session_state.messages[1:]
                 st.rerun()
         else:
             st.caption("No memories saved yet.")
@@ -241,7 +243,7 @@ with st.sidebar:
             today_str = datetime.now(ZoneInfo("America/Vancouver")).strftime("%b %d")
             st.session_state.long_term_memories.append(f"[{today_str}] {manual_mem.strip()}")
             sync_user_memories()
-            st.session_state.messages = get_system_prompt()
+            st.session_state.messages = [get_system_prompt()] + st.session_state.messages[1:]
             st.rerun()
 
     st.divider()
@@ -298,8 +300,8 @@ if prompt := st.chat_input("Write a message..."):
         )
 
         for chunk in stream:
-         for choice in chunk.choices:
-            delta = choice.delta
+            for choice in chunk.choices:
+                delta = choice.delta
                 reasoning_token = getattr(delta, "reasoning", None) or ""
                 content_token = delta.content or ""
 
