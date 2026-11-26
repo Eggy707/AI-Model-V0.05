@@ -1,15 +1,20 @@
 import streamlit as st
 from groq import Groq
-from supabase import create_client
+import requests
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import hashlib
 
 st.set_page_config(page_title="Coda", page_icon="🟠", layout="wide")
 
-# Connect to Groq AI and your permanent Supabase database
 client = Groq(api_key=st.secrets["GROQ_API_KEY"])
-supabase = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
+SB_URL = st.secrets["SUPABASE_URL"].rstrip("/")
+SB_KEY = st.secrets["SUPABASE_KEY"]
+SB_HEADERS = {
+    "apikey": SB_KEY,
+    "Content-Type": "application/json",
+    "Prefer": "return=representation"
+}
 
 st.markdown("""
 <style>
@@ -29,11 +34,14 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- SUPABASE CLOUD DATABASE HELPERS ---
+# --- SUPABASE DIRECT REST HELPERS (Works with sb_publishable_ keys) ---
 def get_user_record(username):
     user_key = username.strip().lower()
-    res = supabase.table("users").select("*").eq("username", user_key).execute()
-    return res.data if res.data else None
+    url = f"{SB_URL}/rest/v1/users?username=eq.{user_key}&select=*"
+    res = requests.get(url, headers=SB_HEADERS)
+    if res.status_code == 200 and res.json():
+        return res.json()
+    return None
 
 def create_user_record(username, password):
     clean_name = username.strip()
@@ -44,17 +52,17 @@ def create_user_record(username, password):
         "password": hash_password(password),
         "memories": []
     }
-    supabase.table("users").insert(new_row).execute()
+    requests.post(f"{SB_URL}/rest/v1/users", headers=SB_HEADERS, json=new_row)
 
 def sync_user_memories():
     if st.session_state.user_name:
         user_key = st.session_state.user_name.strip().lower()
-        supabase.table("users").update({
-            "memories": st.session_state.long_term_memories
-        }).eq("username", user_key).execute()
+        url = f"{SB_URL}/rest/v1/users?username=eq.{user_key}"
+        requests.patch(url, headers=SB_HEADERS, json={"memories": st.session_state.long_term_memories})
 
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
+
 
 # Auto-login check from device URL parameter
 if "user_name" not in st.session_state:
