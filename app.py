@@ -12,6 +12,7 @@ SB_URL = st.secrets["SUPABASE_URL"].rstrip("/")
 SB_KEY = st.secrets["SUPABASE_KEY"]
 SB_HEADERS = {
     "apikey": SB_KEY,
+    "Authorization": f"Bearer {SB_KEY}",
     "Content-Type": "application/json",
     "Prefer": "return=representation"
 }
@@ -53,7 +54,10 @@ def create_user_record(username, password):
         "password": hash_password(password),
         "memories": []
     }
-    requests.post(f"{SB_URL}/rest/v1/users", headers=SB_HEADERS, json=new_row)
+    res = requests.post(f"{SB_URL}/rest/v1/users", headers=SB_HEADERS, json=new_row)
+    if res.status_code in (200, 201):
+        return True, ""
+    return False, f"Database error ({res.status_code}): {res.text}"
 
 def sync_user_memories():
     if st.session_state.user_name:
@@ -114,7 +118,7 @@ def get_system_prompt():
             "NEVER use robotic filler like 'How can I help you' or 'feel free to ask.' "
             "Keep casual chats natural and match the user's energy. "
             "When talking about video games (especially World of Tanks), tank tiers, stats, loadouts, DPS, or TTK, "
-            "ALWAYS use web search to verify exact game stats and tiers first—never guess a tank's tier, alpha damage, or reload time—and double-check all math step-by-step."
+            "ALWAYS use browser search to verify exact game stats and tiers first—never guess a tank's tier, alpha damage, or reload time—and double-check all math step-by-step."
             f"{memory_context}"
         )
     }
@@ -124,7 +128,7 @@ if not st.session_state.setup_done:
     st.markdown("<h2 style='text-align: center; margin-top: 10vh;'>🟠 Coda</h2>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; color: #9E9D99;'>Log in to load your permanent cloud memories, create an account, or continue as a guest.</p>", unsafe_allow_html=True)
     
-    col1, col2, col3 = st.columns([1, 2, 1])
+    col1, col2, col3 = st.columns(3)
     with col2:
         tab_login, tab_signup = st.tabs(["🔑 Log In", "✨ Create Account"])
         
@@ -165,13 +169,16 @@ if not st.session_state.setup_done:
                     elif get_user_record(clean_name):
                         st.error("That username is already taken—try logging in!")
                     else:
-                        create_user_record(clean_name, new_pass)
-                        st.session_state.user_name = clean_name
-                        st.session_state.long_term_memories = []
-                        st.session_state.setup_done = True
-                        st.session_state.messages = [get_system_prompt()]
-                        st.query_params["user"] = clean_name
-                        st.rerun()
+                        ok, err_msg = create_user_record(clean_name, new_pass)
+                        if not ok:
+                            st.error(err_msg)
+                        else:
+                            st.session_state.user_name = clean_name
+                            st.session_state.long_term_memories = []
+                            st.session_state.setup_done = True
+                            st.session_state.messages = [get_system_prompt()]
+                            st.query_params["user"] = clean_name
+                            st.rerun()
 
         st.divider()
         if st.button("Continue as Guest (No Name)", use_container_width=True):
@@ -293,8 +300,10 @@ if prompt := st.chat_input("Write a message..."):
         ]
 
         stream = client.chat.completions.create(
-            model="groq/compound",
+            model="openai/gpt-oss-120b",
             messages=api_messages,
+            reasoning_effort="medium",
+            tools=[{"type": "browser_search"}],
             stream=True
         )
 
