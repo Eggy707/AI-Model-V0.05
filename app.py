@@ -124,7 +124,7 @@ if not st.session_state.setup_done:
     st.markdown("<h2 style='text-align: center; margin-top: 10vh;'>🟠 Coda</h2>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; color: #9E9D99;'>Log in to load your permanent cloud memories, create an account, or continue as a guest.</p>", unsafe_allow_html=True)
     
-    col1, col2, col3 = st.columns()
+    col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         tab_login, tab_signup = st.tabs(["🔑 Log In", "✨ Create Account"])
         
