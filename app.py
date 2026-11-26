@@ -1,5 +1,6 @@
 import streamlit as st
 from groq import Groq
+from ddgs import DDGS
 import requests
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -35,6 +36,18 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# --- LIGHTWEIGHT WEB SEARCH HELPER (Zero Token Bloat) ---
+def quick_web_search(query):
+    try:
+        with DDGS() as ddgs:
+            results = list(ddgs.text(query, max_results=3))
+        if not results:
+            return ""
+        snippets = [f"- {r.get('title', '')}: {r.get('body', '')}" for r in results]
+        return "\n".join(snippets)
+    except Exception:
+        return ""
+
 # --- SUPABASE DIRECT REST HELPERS ---
 def get_user_record(username):
     user_key = username.strip().lower()
@@ -68,7 +81,6 @@ def sync_user_memories():
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
-# Auto-login check from device URL parameter
 if "user_name" not in st.session_state:
     saved_user = st.query_params.get("user", "")
     if saved_user:
@@ -118,7 +130,7 @@ def get_system_prompt():
             "NEVER use robotic filler like 'How can I help you' or 'feel free to ask.' "
             "Keep casual chats natural and match the user's energy. "
             "When talking about video games (especially World of Tanks), tank tiers, stats, loadouts, DPS, or TTK, "
-            "ALWAYS verify exact game stats and tiers first—never guess a tank's tier, alpha damage, or reload time—and double-check all math step-by-step."
+            "rely on the live web search snippets provided with the user's message to verify exact game stats and tiers first—never guess a tank's tier, alpha damage, or reload time—and double-check all math step-by-step."
             f"{memory_context}"
         )
     }
@@ -290,27 +302,34 @@ if prompt := st.chat_input("Write a message..."):
         thought_placeholder = thought_box.empty()
         answer_placeholder = st.empty()
 
-        full_thought = ""
+        # Run lightweight web search first (~300 tokens instead of 15,000)
+        web_snippets = quick_web_search(prompt)
+        full_thought = f"**Web search notes:**\n{web_snippets}\n\n" if web_snippets else ""
+        if full_thought:
+            thought_placeholder.markdown(full_thought)
+
         full_response = ""
         thought_finished = False
 
-        api_messages = [
+        # Keep only the last 8 messages so token usage stays tiny and never hits rate limits
+        recent_history = st.session_state.messages[1:][-8:]
+        api_messages = [st.session_state.messages] + [
             {"role": m["role"], "content": m["content"]}
-            for m in st.session_state.messages
+            for m in recent_history
         ]
+        if web_snippets:
+            api_messages[-1]["content"] += f"\n\n[Live Web Search Context:\n{web_snippets}]"
 
-        # Try 20B with live browser search first (high free TPM limit), fallback to standard 120B
         try:
             stream = client.chat.completions.create(
-                model="openai/gpt-oss-20b",
+                model="openai/gpt-oss-120b",
                 messages=api_messages,
                 reasoning_effort="medium",
-                tools=[{"type": "browser_search"}],
                 stream=True
             )
         except Exception:
             stream = client.chat.completions.create(
-                model="openai/gpt-oss-120b",
+                model="openai/gpt-oss-20b",
                 messages=api_messages,
                 reasoning_effort="medium",
                 stream=True
