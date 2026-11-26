@@ -1,6 +1,5 @@
 import streamlit as st
 from groq import Groq
-from ddgs import DDGS
 import requests
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -36,7 +35,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- SMART LIGHTWEIGHT WEB SEARCH ---
+# --- SMART CLOUD-FRIENDLY SEARCH (Never blocked on Streamlit Cloud) ---
 def needs_search(text):
     clean = text.strip().lower()
     casual_greetings = {
@@ -55,14 +54,27 @@ def needs_search(text):
 
 def quick_web_search(query):
     try:
-        with DDGS() as ddgs:
-            results = list(ddgs.text(query, max_results=3))
-        if not results:
-            return ""
-        snippets = [f"- {r.get('title', '')}: {r.get('body', '')}" for r in results]
-        return "\n".join(snippets)
+        url = "https://wikipedia.org"
+        params = {
+            "action": "query",
+            "list": "search",
+            "srsearch": query,
+            "format": "json",
+            "srlimit": 3
+        }
+        headers = {"User-Agent": "CodaPersonalApp/1.0"}
+        res = requests.get(url, params=params, headers=headers, timeout=5)
+        if res.status_code == 200:
+            hits = res.json().get("query", {}).get("search", [])
+            if hits:
+                snippets = []
+                for h in hits:
+                    clean_snippet = h.get("snippet", "").replace('<span class="searchmatch">', "").replace("</span>", "")
+                    snippets.append(f"- {h.get('title', '')}: {clean_snippet}")
+                return "\n".join(snippets)
     except Exception:
-        return ""
+        pass
+    return ""
 
 # --- SUPABASE DIRECT REST HELPERS ---
 def get_user_record(username):
@@ -144,9 +156,8 @@ def get_system_prompt():
         "content": (
             f"{name_context}You are Coda, a sharp, emotionally intelligent close friend who is also a hardcore gamer and theorycrafter. "
             "NEVER use robotic filler like 'How can I help you' or 'feel free to ask.' "
-            "Keep casual chats natural and match the user's energy. "
-            "When talking about video games (especially World of Tanks), tank tiers, stats, loadouts, DPS, or TTK, "
-            "rely on the live web search snippets provided with the user's message to verify exact game stats and tiers first—never guess a tank's tier, alpha damage, or reload time—and double-check all math step-by-step."
+            "NEVER ask the user to paste search snippets or external data—if [Live Web Search Context] is attached to the message, use it; "
+            "otherwise, answer confidently using your own knowledge and double-check all game math (DPS, DPM, reload times, tiers) step-by-step."
             f"{memory_context}"
         )
     }
