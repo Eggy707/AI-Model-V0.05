@@ -36,7 +36,23 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- LIGHTWEIGHT WEB SEARCH HELPER (Zero Token Bloat) ---
+# --- SMART LIGHTWEIGHT WEB SEARCH ---
+def needs_search(text):
+    clean = text.strip().lower()
+    casual_greetings = {
+        "hi", "hello", "hey", "yo", "sup", "what's up", "whats up",
+        "good morning", "good afternoon", "good evening", "gm", "gn",
+        "thanks", "thank you", "ok", "okay", "lol", "lmao", "nice", "cool"
+    }
+    if clean in casual_greetings or len(clean) < 6:
+        return False
+    search_triggers = [
+        "tier", "tank", "wot", "world of tanks", "dps", "dpm", "ttk", "stats", "nerf", "buff", "patch",
+        "update", "build", "loadout", "meta", "weapon", "gun", "armor", "penetration", "reload", "damage",
+        "who is", "what is", "when is", "how much", "price", "release", "news", "weather", "score", "?"
+    ]
+    return any(word in clean for word in search_triggers)
+
 def quick_web_search(query):
     try:
         with DDGS() as ddgs:
@@ -288,7 +304,7 @@ for msg in st.session_state.messages[1:]:
     avatar = "👤" if msg["role"] == "user" else "🟠"
     with st.chat_message(msg["role"], avatar=avatar):
         if msg.get("thought"):
-            with st.expander("💭 Thought & search process"):
+            with st.expander("💭 Thought process"):
                 st.write(msg["thought"])
         st.write(msg["content"])
 
@@ -298,12 +314,13 @@ if prompt := st.chat_input("Write a message..."):
         st.write(prompt)
 
     with st.chat_message("assistant", avatar="🟠"):
-        thought_box = st.status("Searching & thinking...", expanded=True)
+        should_search = needs_search(prompt)
+        status_label = "Searching & thinking..." if should_search else "Thinking..."
+        thought_box = st.status(status_label, expanded=True)
         thought_placeholder = thought_box.empty()
         answer_placeholder = st.empty()
 
-        # Run lightweight web search first (~300 tokens instead of 15,000)
-        web_snippets = quick_web_search(prompt)
+        web_snippets = quick_web_search(prompt) if should_search else ""
         full_thought = f"**Web search notes:**\n{web_snippets}\n\n" if web_snippets else ""
         if full_thought:
             thought_placeholder.markdown(full_thought)
@@ -311,7 +328,6 @@ if prompt := st.chat_input("Write a message..."):
         full_response = ""
         thought_finished = False
 
-        # Keep only the last 8 messages so token usage stays tiny and never hits rate limits
         recent_history = st.session_state.messages[1:][-8:]
         api_messages = [get_system_prompt()] + [
             {"role": m["role"], "content": m["content"]}
@@ -349,7 +365,7 @@ if prompt := st.chat_input("Write a message..."):
                     if not thought_finished:
                         if full_thought:
                             thought_placeholder.markdown(full_thought)
-                            thought_box.update(label="💭 Thought & search process", state="complete", expanded=False)
+                            thought_box.update(label="💭 Thought process", state="complete", expanded=False)
                         else:
                             thought_box.update(label="Done", state="complete", expanded=False)
                         thought_finished = True
