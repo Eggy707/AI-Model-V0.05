@@ -270,7 +270,7 @@ if prompt := st.chat_input("Write a message..."):
         stream = client.chat.completions.create(
             model="openai/gpt-oss-120b",
             messages=api_messages,
-            reasoning_effort="high",
+            reasoning_effort="medium",
             stream=True
         )
 
