@@ -35,7 +35,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- SMART TAVILY WEB SEARCH (Accurate Gaming & Real-Time Info) ---
+# --- SMART TAVILY WEB SEARCH ---
 def needs_search(text):
     clean = text.strip().lower()
     casual_greetings = {
@@ -56,27 +56,38 @@ def quick_web_search(query):
     tavily_key = st.secrets.get("TAVILY_API_KEY", "")
     if not tavily_key:
         return ""
+    clean_q = query.strip()
+    wot_hints = [
+        "tier", "tank", "dpm", "alpha", "penetration", "hull", "turret",
+        "autoloader", "heavy", "medium", "td", "light", "spg", "gold", "heat", "apcr"
+    ]
+    if any(w in clean_q.lower() for w in wot_hints) and "world of tanks" not in clean_q.lower() and "wot" not in clean_q.lower():
+        clean_q = f"{clean_q} World of Tanks"
     try:
         res = requests.post(
             "https://tavily.com",
             json={
                 "api_key": tavily_key,
-                "query": query,
-                "search_depth": "basic",
+                "query": clean_q,
+                "search_depth": "advanced",
+                "include_answer": True,
                 "max_results": 3
             },
-            timeout=6
+            timeout=8
         )
         if res.status_code == 200:
-            results = res.json().get("results", [])
-            if results:
-                snippets = [f"- {r.get('title', '')}: {r.get('content', '')[:320]}" for r in results]
-                return "\n".join(snippets)
+            data = res.json()
+            parts = []
+            if data.get("answer"):
+                parts.append(f"Direct Verified Answer: {data['answer']}")
+            for r in data.get("results", []):
+                parts.append(f"- {r.get('title', '')}: {r.get('content', '')[:650]}")
+            return "\n".join(parts)
     except Exception:
         pass
     return ""
 
-# --- SUPABASE DIRECT REST HELPERS ---
+# --- SUPABASE CLOUD HELPERS ---
 def get_user_record(username):
     user_key = username.strip().lower()
     url = f"{SB_URL}/rest/v1/users?username=eq.{user_key}&select=*"
@@ -108,6 +119,7 @@ def sync_user_memories():
 
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
+
 
 if "user_name" not in st.session_state:
     saved_user = st.query_params.get("user", "")
@@ -156,7 +168,7 @@ def get_system_prompt():
         "content": (
             f"{name_context}You are Coda, a sharp, emotionally intelligent close friend who is also a hardcore gamer and theorycrafter. "
             "NEVER use robotic filler like 'How can I help you' or 'feel free to ask.' "
-            "NEVER ask the user to paste search snippets or external data—if [Live Web Search Context] is attached to the message, trust those live facts over outdated training data; "
+            "NEVER ask the user to paste search snippets or external data—if [Live Web Search Context] is attached to the message, strictly trust those live verified facts over outdated training data; "
             "otherwise, answer confidently using your own knowledge and double-check all game math (DPS, DPM, reload times, tiers) step-by-step."
             f"{memory_context}"
         )
