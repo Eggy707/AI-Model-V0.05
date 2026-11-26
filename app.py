@@ -299,7 +299,7 @@ if prompt := st.chat_input("Write a message..."):
 
         for chunk in stream:
          for choice in chunk.choices:
-             delta = choice.delta
+            delta = choice.delta
                 reasoning_token = getattr(delta, "reasoning", None) or ""
                 content_token = delta.content or ""
 
