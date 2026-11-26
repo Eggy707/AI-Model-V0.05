@@ -313,7 +313,7 @@ if prompt := st.chat_input("Write a message..."):
 
         # Keep only the last 8 messages so token usage stays tiny and never hits rate limits
         recent_history = st.session_state.messages[1:][-8:]
-        api_messages = [st.session_state.messages] + [
+        api_messages = [get_system_prompt()] + [
             {"role": m["role"], "content": m["content"]}
             for m in recent_history
         ]
