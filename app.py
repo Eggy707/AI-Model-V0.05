@@ -218,7 +218,7 @@ with st.sidebar:
                     if clean_fact:
                         st.session_state.long_term_memories.append(f"[{today_str}] {clean_fact}")
                 sync_user_memories()
-                st.session_state.messages = get_system_prompt()
+                st.session_state.messages[0] = get_system_prompt()
                 st.success("Saved permanently to cloud!")
         else:
             st.warning("Chat a bit first before saving!")
@@ -230,7 +230,7 @@ with st.sidebar:
             if st.button("Clear all memories", use_container_width=True):
                 st.session_state.long_term_memories = []
                 sync_user_memories()
-                st.session_state.messages = get_system_prompt()
+                st.session_state.messages[0] = get_system_prompt()
                 st.rerun()
         else:
             st.caption("No memories saved yet.")
@@ -240,7 +240,7 @@ with st.sidebar:
             today_str = datetime.now(ZoneInfo("America/Vancouver")).strftime("%b %d")
             st.session_state.long_term_memories.append(f"[{today_str}] {manual_mem.strip()}")
             sync_user_memories()
-            st.session_state.messages = get_system_prompt()
+            st.session_state.messages[0] = get_system_prompt()
             st.rerun()
 
     st.divider()
