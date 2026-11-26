@@ -35,7 +35,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- SMART CLOUD-FRIENDLY SEARCH (Never blocked on Streamlit Cloud) ---
+# --- SMART TAVILY WEB SEARCH (Accurate Gaming & Real-Time Info) ---
 def needs_search(text):
     clean = text.strip().lower()
     casual_greetings = {
@@ -53,24 +53,24 @@ def needs_search(text):
     return any(word in clean for word in search_triggers)
 
 def quick_web_search(query):
+    tavily_key = st.secrets.get("TAVILY_API_KEY", "")
+    if not tavily_key:
+        return ""
     try:
-        url = "https://wikipedia.org"
-        params = {
-            "action": "query",
-            "list": "search",
-            "srsearch": query,
-            "format": "json",
-            "srlimit": 3
-        }
-        headers = {"User-Agent": "CodaPersonalApp/1.0"}
-        res = requests.get(url, params=params, headers=headers, timeout=5)
+        res = requests.post(
+            "https://tavily.com",
+            json={
+                "api_key": tavily_key,
+                "query": query,
+                "search_depth": "basic",
+                "max_results": 3
+            },
+            timeout=6
+        )
         if res.status_code == 200:
-            hits = res.json().get("query", {}).get("search", [])
-            if hits:
-                snippets = []
-                for h in hits:
-                    clean_snippet = h.get("snippet", "").replace('<span class="searchmatch">', "").replace("</span>", "")
-                    snippets.append(f"- {h.get('title', '')}: {clean_snippet}")
+            results = res.json().get("results", [])
+            if results:
+                snippets = [f"- {r.get('title', '')}: {r.get('content', '')[:320]}" for r in results]
                 return "\n".join(snippets)
     except Exception:
         pass
@@ -156,7 +156,7 @@ def get_system_prompt():
         "content": (
             f"{name_context}You are Coda, a sharp, emotionally intelligent close friend who is also a hardcore gamer and theorycrafter. "
             "NEVER use robotic filler like 'How can I help you' or 'feel free to ask.' "
-            "NEVER ask the user to paste search snippets or external data—if [Live Web Search Context] is attached to the message, use it; "
+            "NEVER ask the user to paste search snippets or external data—if [Live Web Search Context] is attached to the message, trust those live facts over outdated training data; "
             "otherwise, answer confidently using your own knowledge and double-check all game math (DPS, DPM, reload times, tiers) step-by-step."
             f"{memory_context}"
         )
