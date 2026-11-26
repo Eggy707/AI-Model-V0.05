@@ -34,13 +34,13 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- SUPABASE DIRECT REST HELPERS (Works with sb_publishable_ keys) ---
+# --- SUPABASE DIRECT REST HELPERS ---
 def get_user_record(username):
     user_key = username.strip().lower()
     url = f"{SB_URL}/rest/v1/users?username=eq.{user_key}&select=*"
     res = requests.get(url, headers=SB_HEADERS)
     if res.status_code == 200 and res.json():
-        return res.json()
+        return res.json()[0]
     return None
 
 def create_user_record(username, password):
@@ -62,7 +62,6 @@ def sync_user_memories():
 
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
-
 
 # Auto-login check from device URL parameter
 if "user_name" not in st.session_state:
